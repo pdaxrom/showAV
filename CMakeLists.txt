@@ -32,6 +32,7 @@ qt_add_executable(showAV
     main.cpp
     videosettings.cpp videosettings.h ${videosettings_form}
     metadatadialog.cpp metadatadialog.h
+    qioconsumablebuffer.h
 )
 
 set_target_properties(showAV PROPERTIES

@@ -6,6 +6,8 @@
 
 #include <QAudioInput>
 #include <QAudioOutput>
+#include <QAudioSource>
+#include <QAudioSink>
 #include <QCamera>
 #include <QImageCapture>
 #include <QMediaCaptureSession>
@@ -16,6 +18,8 @@
 #include <QBuffer>
 
 #include <QMainWindow>
+
+#include "qioconsumablebuffer.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -101,14 +105,15 @@ private:
     QMediaDevices m_audioDevices;
     QMediaDevices m_videoDevices;
 
-    QBuffer audioRdBuff;
-    QBuffer audioWrBuff;
+    QScopedPointer<QAudioSource> m_audioSource;
+    QScopedPointer<QAudioSink> m_audioSink;
+
+    QIOConsumableBuffer m_audioBuffer;
 
     QScopedPointer<QImageCapture> m_imageCapture;
     QMediaCaptureSession m_captureSession;
     QScopedPointer<QCamera> m_camera;
     QScopedPointer<QAudioInput> m_audioInput;
-    QScopedPointer<QAudioOutput> m_audioOutput;
     QScopedPointer<QMediaRecorder> m_mediaRecorder;
 
     bool m_isCapturingImage = false;

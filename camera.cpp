@@ -38,6 +38,8 @@
   #include <QPermission>
 #endif
 
+#include "qioconsumablebuffer.h"
+
 Camera::Camera() : ui(new Ui::Camera)
 {
     ui->setupUi(this);
@@ -82,22 +84,11 @@ void Camera::init()
     }
 #endif
 
-//    QBuffer audioRdBuff;
-//    QBuffer audioWrBuff;
-
-    //audioWrBuff.open(QBuffer::WriteOnly);
-    //audioRdBuff.open(QBuffer::ReadOnly);
-
-    //QObject::connect(&audioWrBuff, &QIODevice::bytesWritten, &Camera::updateAudioBuffer);
-
-
     audioDevicesMenu = ui->menuDevices->addMenu(tr("Audio"));
     videoDevicesMenu = ui->menuDevices->addMenu(tr("Video"));
 
-    //m_audioInput.reset(new QAudioInput);
-    //m_captureSession.setAudioInput(m_audioInput.get());
+    // Audio devices:
 
-    // AUdio devices:
     audioDevicesGroup = new QActionGroup(this);
     audioDevicesGroup->setExclusive(true);
     updateAudios();
@@ -123,23 +114,6 @@ void Camera::init()
     setCamera(QMediaDevices::defaultVideoInput());
 }
 
-// void Camera::updateAudioBuffer()
-// {
-//     // remove all data that was already read
-//     audioRdBuff.buffer().remove(0, audioRdBuff.pos());
-
-//     // set pointer to the beginning of the unread data
-//     const auto res = audioRdBuff.seek(0);
-//     assert(res);
-
-//     // write new data
-//     audioRdBuff.buffer().append(audioWrBuff.buffer());
-
-//     // remove all data that was already written
-//     audioWrBuff.buffer().clear();
-//     audioWrBuff.seek(0);
-// }
-
 void Camera::setAudio(const QAudioDevice &audioDevice)
 {
     qDebug() << "set audio device " << audioDevice.description();
@@ -147,8 +121,33 @@ void Camera::setAudio(const QAudioDevice &audioDevice)
     m_audioInput->setDevice(audioDevice);
     m_captureSession.setAudioInput(m_audioInput.get());
 
-    m_audioOutput.reset(new QAudioOutput(QMediaDevices::defaultAudioOutput()));
-    m_captureSession.setAudioOutput(m_audioOutput.get());
+    QAudioFormat format;
+    format.setSampleRate(48000);
+    format.setChannelCount(2);
+    format.setSampleFormat(QAudioFormat::Int16);
+
+    qDebug() << "samplerate " << format.sampleRate() << ", channels " << format.channelCount() << ", format " << format.sampleFormat();
+
+    if (!audioDevice.isFormatSupported(format)) {
+        qWarning() << "Default format not supported, trying to use the nearest.";
+        return;
+    }
+    m_audioSource.reset(new QAudioSource(audioDevice, format));
+
+    QAudioDevice deviceInfo(QMediaDevices::defaultAudioOutput());
+    if (!deviceInfo.isFormatSupported(format)) {
+        qWarning() << "Raw audio format not supported by backend, cannot play audio.";
+        return;
+    }
+    m_audioSink.reset(new QAudioSink(deviceInfo, format));
+
+    if (m_audioBuffer.isOpen())
+        m_audioBuffer.close();
+
+    m_audioBuffer.open(QIODeviceBase::ReadWrite);
+
+    m_audioSource->start(&m_audioBuffer);
+    m_audioSink->start(&m_audioBuffer);
 }
 
 void Camera::setCamera(const QCameraDevice &cameraDevice)
@@ -420,8 +419,7 @@ void Camera::closeEvent(QCloseEvent *event)
 void Camera::updateAudios()
 {
     audioDevicesMenu->clear();
-    QMediaDevices devices = new QMediaDevices(this);
-    for (auto deviceInfo: devices.audioInputs()) {
+    for (auto deviceInfo: QMediaDevices::audioInputs()) {
         QAction *audioDeviceAction = new QAction(deviceInfo.description(), audioDevicesGroup);
         audioDeviceAction->setCheckable(true);
         audioDeviceAction->setData(QVariant::fromValue(deviceInfo));
