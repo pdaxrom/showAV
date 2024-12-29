@@ -33,6 +33,7 @@
 
 #include <QDir>
 #include <QTimer>
+#include <QSettings>
 
 #if QT_CONFIG(permissions)
   #include <QPermission>
@@ -110,23 +111,32 @@ void Camera::init()
     connect(ui->exposureCompensation, &QAbstractSlider::valueChanged, this,
             &Camera::setExposureCompensation);
 
-    setAudio(QMediaDevices::defaultAudioInput());
-    setCamera(QMediaDevices::defaultVideoInput());
+//    setAudio(QMediaDevices::defaultAudioInput());
+//    setCamera(QMediaDevices::defaultVideoInput());
 }
 
 void Camera::setAudio(const QAudioDevice &audioDevice)
 {
     qDebug() << "set audio device " << audioDevice.description();
-    m_audioInput.reset(new QAudioInput);
-    m_audioInput->setDevice(audioDevice);
-    m_captureSession.setAudioInput(m_audioInput.get());
+
+    QSettings settings;
+
+    settings.setValue("audio_device", audioDevice.description());
 
     QAudioFormat format;
     format.setSampleRate(48000);
-    format.setChannelCount(2);
+    format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
     format.setSampleFormat(QAudioFormat::Int16);
 
     qDebug() << "samplerate " << format.sampleRate() << ", channels " << format.channelCount() << ", format " << format.sampleFormat();
+
+    m_audioInput.reset(new QAudioInput);
+    m_audioInput->setDevice(audioDevice);
+
+    //m_audioInputBuffer.reset(new QAudioBufferInput(format));
+    //m_captureSession.setAudioBufferInput(m_audioInputBuffer.get());
+
+    m_captureSession.setAudioInput(m_audioInput.get());
 
     if (!audioDevice.isFormatSupported(format)) {
         qWarning() << "Default format not supported, trying to use the nearest.";
@@ -153,6 +163,11 @@ void Camera::setAudio(const QAudioDevice &audioDevice)
 void Camera::setCamera(const QCameraDevice &cameraDevice)
 {
     qDebug() << "set video device " << cameraDevice.description();
+
+    QSettings settings;
+
+    settings.setValue("video_device", cameraDevice.description());
+
     m_camera.reset(new QCamera(cameraDevice));
     m_captureSession.setCamera(m_camera.data());
 
@@ -418,31 +433,63 @@ void Camera::closeEvent(QCloseEvent *event)
 
 void Camera::updateAudios()
 {
+    QSettings settings;
+    QString deviceName = settings.value("audio_device").toString();
+
+    bool checked = false;
+
+    QAudioDevice device;
+
     audioDevicesMenu->clear();
     for (auto deviceInfo: QMediaDevices::audioInputs()) {
         QAction *audioDeviceAction = new QAction(deviceInfo.description(), audioDevicesGroup);
         audioDeviceAction->setCheckable(true);
         audioDeviceAction->setData(QVariant::fromValue(deviceInfo));
 
-        if (deviceInfo == QMediaDevices::defaultAudioInput())
+        if (deviceInfo.description() == deviceName) {
+            device = deviceInfo;
             audioDeviceAction->setChecked(true);
+            checked = true;
+        }
+        if (!checked && deviceInfo == QMediaDevices::defaultAudioInput()) {
+            device = deviceInfo;
+            audioDeviceAction->setChecked(true);
+        }
         audioDevicesMenu->addAction(audioDeviceAction);
     }
+
+    setAudio(device);
 }
 
 void Camera::updateCameras()
 {
+    QSettings settings;
+    QString deviceName = settings.value("video_device").toString();
+
+    bool checked = false;
+
+    QCameraDevice device;
+
     videoDevicesMenu->clear();
     const QList<QCameraDevice> availableCameras = QMediaDevices::videoInputs();
     for (const QCameraDevice &cameraDevice : availableCameras) {
         QAction *videoDeviceAction = new QAction(cameraDevice.description(), videoDevicesGroup);
         videoDeviceAction->setCheckable(true);
         videoDeviceAction->setData(QVariant::fromValue(cameraDevice));
-        if (cameraDevice == QMediaDevices::defaultVideoInput())
+
+        if (cameraDevice.description() == deviceName) {
+            device = cameraDevice;
             videoDeviceAction->setChecked(true);
+            checked = true;
+        }
+        if (!checked && cameraDevice == QMediaDevices::defaultVideoInput()) {
+            device = cameraDevice;
+            videoDeviceAction->setChecked(true);
+        }
 
         videoDevicesMenu->addAction(videoDeviceAction);
     }
+    setCamera(device);
 }
 
 void Camera::showMetaDataDialog()

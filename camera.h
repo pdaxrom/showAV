@@ -8,6 +8,7 @@
 #include <QAudioOutput>
 #include <QAudioSource>
 #include <QAudioSink>
+#include <QAudioBufferInput>
 #include <QCamera>
 #include <QImageCapture>
 #include <QMediaCaptureSession>
@@ -109,6 +110,7 @@ private:
     QScopedPointer<QAudioSink> m_audioSink;
 
     QIOConsumableBuffer m_audioBuffer;
+    //QScopedPointer<QAudioBufferInput> m_audioInputBuffer;
 
     QScopedPointer<QImageCapture> m_imageCapture;
     QMediaCaptureSession m_captureSession;
